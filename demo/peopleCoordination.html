@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Custom Animation/人员定位demo</title>
+    <meta http-equiv=Content-Type content="text/html;charset=utf-8">
+    <meta http-equiv=X-UA-Compatible content="IE=edge,chrome=1">
+    <meta content=always name=referrer>
+    <link rel="stylesheet" href="./js/ol.css" type="text/css">
+    <script src="./js/ol.js"></script>
+    <script src="./js/jquery-1.11.3.min.js"></script>
+    <script src="https://api.mapbox.com/mapbox.js/plugins/arc.js/v0.1.0/arc.js"></script>
+</head>
+<body>
+<div id="map" class="map"></div>
+<script>
+    var format = 'image/png';
+    var bounds = [0.0005950317751121, 0.0008108268570922, 0.0067774664494178, 0.003885651474484];
+    var untiled = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+            ratio: 1,
+            url: 'http://192.168.0.69:7000/geoserver/sicp_base_map/wms',
+            params: {
+                'FORMAT': format,
+                'VERSION': '1.1.1',
+                LAYERS: 'sicp_base_map:map_funing',
+                STYLES: 'greylines'
+            }
+        })
+    });
+    var projection = new ol.proj.Projection({
+        code: 'EPSG:4326',
+        units: 'degrees',
+        axisOrientation: 'neu'
+    });
+
+    var source = new ol.source.Vector({
+        wrapX: false
+    });
+    var vector = new ol.layer.Vector({
+        source: source
+    });
+
+    var map = new ol.Map({
+        layers: [untiled, vector],
+        target: 'map',
+        view: new ol.View({
+            zoom: 17,
+            minZoom: 17.8,
+            projection: projection
+        })
+    });
+
+    map.getView().fit(bounds, map.getSize());
+
+
+    var feature1 = new ol.Feature({
+        geometry: new ol.geom.Polygon(
+            [
+                [
+                    [0.0006622477866350169, 0.0014913294640354641],
+                    [0.0011482832795043458, 0.0014920997263062558],
+                    [0.0011459724926919726, 0.0012332916033203686],
+                    [0.0006637883111765998, 0.001231751078778786],
+                    [0.0006237883111765998, 0.001531751078778786],
+                    [0.0006622477866350169, 0.0014936402508478382]
+                ]
+            ]
+        )
+    });
+
+    source.addFeature(feature1);
+
+    var count = 0;
+    function addRandomFeature() {
+        var x = Math.random() / 1000 + 0.0015950317751121;
+        var y = Math.random() / 1000 + 0.0008108268570922;
+        var geom = new ol.geom.Point([x, y]);
+        var feature = new ol.Feature(geom);
+        console.log(isInArea(geom.getCoordinates(), feature1.getGeometry().getCoordinates()[0]));
+//        source.clear();
+        source.addFeature(feature);
+        count++;
+        if (count >= 50) {
+            window.clearInterval(progressq);
+            console.log('stop add');
+        }
+    }
+    //动画持续时间
+    var duration = 1000;
+    function flash(feature) {
+        var start = new Date().getTime();
+        var listenerKey;
+
+        function animate(event) {
+            //发生事件的对应feature
+            var vectorContext = event.vectorContext;
+            //渲染状态
+            var frameState = event.frameState;
+
+            //复制一个发生事件的feature
+            var flashGeom = feature.getGeometry().clone();
+            //消耗时间
+            var elapsed = frameState.time - start;
+            //缓冲动画 圆圈外扩
+            var elapsedRatio = elapsed / duration;
+            // radius will be 5 at start and 30 at end.
+            //半径
+            var radius = ol.easing.easeOut(elapsedRatio) * 15 + 5;
+            //不透明度
+            var opacity = ol.easing.easeOut(1 - elapsedRatio);
+            //动态变化圆大小透明度
+            var style = new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: radius,
+                    snapToPixel: false,
+                    stroke: new ol.style.Stroke({
+                        color: 'rgba(255, 0, 0, ' + opacity + ')',
+                        width: 0.125 + opacity
+                    })
+                })
+            });
+            //给新建的feature设置style
+            vectorContext.setStyle(style);
+
+            vectorContext.drawGeometry(flashGeom);
+            if (elapsed > duration) {
+                ol.Observable.unByKey(listenerKey);
+                return;
+            }
+            // tell OpenLayers to continue postcompose animation
+            //每次动画执行完成之后继续渲染 递归回这个方法切换样式
+            map.render();
+        }
+
+        listenerKey = map.on('postcompose', animate);
+    }
+
+    source.on('addfeature', function (e) {
+        flash(e.feature);
+    });
+
+    var progressq = window.setInterval(addRandomFeature, 800);
+
+    /***
+     * 是否点在范围内
+     * @param point
+     * @param vs
+     * @returns {boolean}
+     */
+
+    function isInArea(point, vs) {
+        var x = point[0], y = point[1];
+        var inside = false;
+        for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            var xi = vs[i][0], yi = vs[i][1];
+            var xj = vs[j][0], yj = vs[j][1];
+
+            var intersect = ((yi > y) != (yj > y))
+                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+
+        return inside;
+    }
+
+
+
+</script>

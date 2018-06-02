@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Popup限制点击范围为蓝色大球</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <link rel="stylesheet" href="https://openlayers.org/en/v3.13.1/css/ol.css" type="text/css">
+    <script src="https://openlayers.org/en/v3.13.1/build/ol.js"></script>
+    <style>
+        .ol-popup {
+            position: absolute;
+            background-color: white;
+            -webkit-filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.2));
+            filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.2));
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #cccccc;
+            bottom: 12px;
+            left: -50px;
+            min-width: 280px;
+        }
+
+        .ol-popup:after, .ol-popup:before {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0;
+            width: 0;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .ol-popup:after {
+            border-top-color: white;
+            border-width: 10px;
+            left: 48px;
+            margin-left: -10px;
+        }
+
+        .ol-popup:before {
+            border-top-color: #cccccc;
+            border-width: 11px;
+            left: 48px;
+            margin-left: -11px;
+        }
+
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 2px;
+            right: 8px;
+        }
+
+        .ol-popup-closer:after {
+            content: "✖";
+        }
+    </style>
+</head>
+<body>
+<div id="map" class="map"></div>
+<div id="popup" class="ol-popup">
+    <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+    <div id="popup-content"></div>
+</div>
+<form class="form-inline">
+    <label>Geometry type &nbsp;</label>
+    <select id="type">
+        <option value="Point">Point</option>
+    </select>
+</form>
+<script>
+    //定义气泡层
+    var container = document.getElementById('popup');
+    var content = document.getElementById('popup-content');
+    var closer = document.getElementById('popup-closer');
+
+
+    //定义气泡层覆盖overlay
+    var overlay = new ol.Overlay(/** @type {olx.OverlayOptions} */ ({
+        element: container,
+        autoPan: true,
+        autoPanAnimation: {
+            duration: 250
+        }
+    }));
+
+
+    // 这里是关闭overlay的代码
+    closer.onclick = function () {
+        overlay.setPosition(undefined);
+        closer.blur();
+        return false;
+    };
+
+    // 在原点处创建一个feature1
+    var feature1 = new ol.Feature({
+        geometry: new ol.geom.Point([0, 0])
+    });
+
+    feature1.setId("123");
+
+    // feature1设置为半径为100像素的圆
+    feature1.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+            radius: 100,
+            fill: new ol.style.Fill({
+                color: 'blue'
+            })
+        })
+    }));
+
+
+    //加载大球 overlay
+    var map = new ol.Map({
+        layers: [
+            new ol.layer.Vector({
+                source: new ol.source.Vector({
+                    features: [feature1]
+                })
+            })],
+        overlays: [overlay],
+        target: 'map',
+        view: new ol.View({
+            center: [0, 0],
+            zoom: 1
+        })
+    });
+    //给地图注册鼠标移动事件 当移动到大球那里的时候给大球注册一个moseover的鼠标移动pointermove事件
+    map.on('pointermove', function (evt) {
+        map.forEachFeatureAtPixel(evt.pixel, function (feature) {
+            feature.dispatchEvent({type: 'mouseover', event: evt});
+        });
+    });
+    //大球这里触发了鼠标移动事件的时候 生成一个Popup显示当前坐标
+    feature1.on('mouseover', function (evt) {
+        var coordinate = evt.event.coordinate;
+        var hdms = ol.coordinate.toStringHDMS(ol.proj.transform(
+            coordinate, 'EPSG:3857', 'EPSG:4326'));
+        content.innerHTML = 'You clicked here:' + hdms + '';
+        overlay.setPosition(coordinate);
+        setTimeout("closeit()", 2000);
+    });
+
+    //关闭Popup并移除Popup div里面的内容
+    function closeit() {
+        overlay.setPosition(undefined);
+        closer.blur();
+        return false;
+    }
+</script>
+</body>
+</html>

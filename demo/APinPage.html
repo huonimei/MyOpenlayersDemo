@@ -1,0 +1,641 @@
+<!--AP管理示范页面 需要原始版本底图 就是坐标最大300多的那个底图-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AP管理</title>
+    <link rel="stylesheet" href="./js/ol.css" type="text/css">
+    <script src="./js/ol.js"></script>
+    <script src="./js/jquery-1.11.3.min.js"></script>
+</head>
+<style>
+    .ol-popup {
+        position: absolute;
+        background-color: white;
+        -webkit-filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.2));
+        filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.2));
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #cccccc;
+        bottom: 12px;
+        left: -50px;
+        min-width: 160px;
+    }
+
+    .ol-popup:after, .ol-popup:before {
+        top: 100%;
+        border: solid transparent;
+        content: " ";
+        height: 0;
+        width: 0;
+        position: absolute;
+        pointer-events: none;
+    }
+
+    .ol-popup:after {
+        border-top-color: white;
+        border-width: 10px;
+        left: 68px;
+        margin-left: -10px;
+    }
+
+    .ol-popup:before {
+        border-top-color: #cccccc;
+        border-width: 11px;
+        left: 68px;
+        margin-left: -11px;
+    }
+
+    .ol-popup-closer {
+        text-decoration: none;
+        position: absolute;
+        top: 2px;
+        right: 8px;
+    }
+
+    .ol-popup-closer:after {
+        content: "✖";
+    }
+
+    .ol-zoom {
+        top: 52px;
+    }
+
+    .ol-toggle-options {
+        z-index: 1000;
+        background: rgba(255, 255, 255, 0.4);
+        left: 8px;
+        top: 0px;
+        position: absolute;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    .ol-toggle-options a {
+        background: rgba(0, 60, 136, 0.5);
+        color: white;
+        display: block;
+        height: 22px;
+        margin: 1px;
+        padding: 0;
+        text-align: center;
+        text-decoration: none;
+        width: 92px;
+        border-radius: 2px;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        border: 1px;
+        box-shadow: 0px 0px 2px #666;
+        cursor: pointer;
+    }
+
+    .ol-toggle-options a:hover {
+        color: #fff;
+        text-decoration: none;
+        background: rgba(0, 60, 136, 0.7);
+    }
+
+    body {
+        font-family: Verdana, Geneva, Arial, Helvetica, sans-serif;
+        font-size: small;
+    }
+
+
+</style>
+</head>
+<body style="width: 100%;height: 100%">
+<div id="popup" class="ol-popup">
+    <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+    <div id="popup-content"></div>
+</div>
+<div id="toolbar" style="display: none;">
+</div>
+<div id="map">
+    <div class="ol-toggle-options ol-unselectable">
+        <a title="切换视图" id="aname" onClick="toggleControlPanel()" href="#toggle">切换视图</a>
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(function () {
+        bulidLineFeature();
+        buildDeviceFeature();
+        addroad();
+        removeInteraction();
+
+    });
+    //定义气泡层
+    var container = document.getElementById('popup');
+    var content = document.getElementById('popup-content');
+    var closer = document.getElementById('popup-closer');
+
+
+    //定义气泡层覆盖overlay
+    var overlay = new ol.Overlay(/** @type {olx.OverlayOptions} */ ({
+        element: container,
+        autoPan: true,
+        autoPanAnimation: {
+            duration: 250
+        }
+    }));
+
+
+    // 这里是关闭overlay的代码
+    closer.onclick = function () {
+        overlay.setPosition(undefined);
+        closer.blur();
+        return false;
+    };
+
+    //定义底图传输格式以及范围
+    var format = 'image/png';
+    var bounds = [-0.1888009466926439, -8.914923602420576,
+        368.11119905330736, 173.98624339757941];
+    //变电站底图
+    var tiled = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+            ratio: 1,
+            url: 'http://localhost:8080/geoserver/sicpbase/wms',
+            params: {
+                'FORMAT': format,
+                'VERSION': '1.1.1',
+                STYLES: 'graylines',
+                LAYERS: 'sicpbase:Et'
+            }
+        })
+    });
+
+    //底图用的坐标系 单位为 M 且为x y平面坐标系
+    var projection = new ol.proj.Projection({
+        code: 'EPSG:404000',
+        units: 'degrees',
+        axisOrientation: 'neu',
+        global: false
+    });
+
+
+    //加载天线1的source
+    var devsource = new ol.source.Vector();
+    //加载天线1的图层
+    var devlayer = new ol.layer.Vector({
+        source: devsource
+    });
+    //加载天线2的source
+    var devsource1 = new ol.source.Vector();
+    //加载天线2的图层
+    var devlayer1 = new ol.layer.Vector({
+        source: devsource1
+    });
+
+    //加载连接线的source
+    var devsource2 = new ol.source.Vector();
+    //加载连接线的图层
+    var devlayer2 = new ol.layer.Vector({
+        source: devsource2
+    });
+
+    //加载底图（地图） 以及其他地方的图层
+    var map = new ol.Map({
+        target: 'map',
+        overlays: [overlay],
+        layers: [devlayer, devlayer1, devlayer2],
+        view: new ol.View({
+            zoom: 1,
+            projection: projection
+        })
+    });
+    //使底图图层固定在底图图层大小范围内
+    map.getView().fit(bounds, map.getSize());
+
+
+    /***
+     * 注册鼠标移动到features上面的事件
+     * 当划到设备上出现悬浮窗口
+     *  显示设备名称
+     * */
+
+    map.on('pointermove', function (evt) {
+        if (draw == null) {
+            map.forEachFeatureAtPixel(evt.pixel, function (feature) {
+                if (feature.getStyle().getText() == null) {
+                    content.innerHTML = '上行:11bps' + '</br>' +
+                        '下行:22bps' + '</br>' +
+                        '共计上行:1221bps' + '</br>' +
+                        '共计下行:3435bps';
+                    overlay.setPosition(evt.coordinate);
+                    setTimeout("closeit()", 1500);
+                }
+            });
+        }
+    });
+
+
+    /**
+     *关闭悬浮窗口
+     **/
+    function closeit() {
+        overlay.setPosition(undefined);
+        closer.blur();
+        return false;
+    }
+
+    /////////////////设备管理svg图标主要代码开始////////////////////
+    //构建设备的feature对象
+    function bulidLineFeature() {
+        var devFeature = new ol.Feature({
+            geometry: new ol.geom.Point([326.5197928033074, 166.58813540902844])
+        });
+        var devFeature1 = new ol.Feature({
+            geometry: new ol.geom.Point([199.79323030330738, 78.20753489757945])
+        });
+        var devFeature2 = new ol.Feature({
+            geometry: new ol.geom.Point([333.1994803033074, 66.363784897579456])
+        });
+        var devFeature3 = new ol.Feature({
+            geometry: new ol.geom.Point([51.94948030330737, 59.33253489757945])
+        });
+        var style = new ol.style.Style({
+            image: new ol.style.Icon({
+                src: './testpng/tx1.png',
+                size: [64, 64]
+            })
+        });
+        devFeature.setStyle(style);
+        devFeature1.setStyle(style);
+        devFeature2.setStyle(style);
+        devFeature3.setStyle(style);
+        devsource.addFeature(devFeature);
+        devsource.addFeature(devFeature1);
+        devsource.addFeature(devFeature2);
+        devsource.addFeature(devFeature3);
+    }
+
+    function buildDeviceFeature() {
+        var devFeature = new ol.Feature({
+            geometry: new ol.geom.Point([26.988542803307386, 84.64503489757945])
+        });
+        var devFeature1 = new ol.Feature({
+            geometry: new ol.geom.Point([8.355730303307386, 47.37940989757945])
+        });
+        var devFeature2 = new ol.Feature({
+            geometry: new ol.geom.Point([44.215105303307396, 19.16651927257942])
+        });
+        var devFeature3 = new ol.Feature({
+            geometry: new ol.geom.Point([88.16596192436491, 53.480552058989446])
+        });
+        var devFeature4 = new ol.Feature({
+            geometry: new ol.geom.Point([115.23073030330737, 87.10597239757945])
+        });
+        var devFeature5 = new ol.Feature({
+            geometry: new ol.geom.Point([145.11354280330738, 55.11378489757945])
+        });
+        var devFeature6 = new ol.Feature({
+            geometry: new ol.geom.Point([145.11354280330738, 55.11378489757945])
+        });
+        var devFeature7 = new ol.Feature({
+            geometry: new ol.geom.Point([112.76979280330737, 22.41847239757945])
+        });
+        var devFeature8 = new ol.Feature({
+            geometry: new ol.geom.Point([179.918230303307387, 32.96534739757945])
+        });
+        var devFeature9 = new ol.Feature({
+            geometry: new ol.geom.Point([203.82448030330738, 65.30909739757945])
+        });
+        var devFeature10 = new ol.Feature({
+            geometry: new ol.geom.Point([166.55885530330738, 132.45753489757945])
+        });
+        var devFeature11 = new ol.Feature({
+            geometry: new ol.geom.Point([206.63698030330738, 115.23097239757945])
+        });
+        var devFeature12 = new ol.Feature({
+            geometry: new ol.geom.Point([227.73073030330738, 136.32472239757945])
+        });
+        var devFeature13 = new ol.Feature({
+            geometry: new ol.geom.Point([265.3479178033074, 137.73097239757945])
+        });
+        var devFeature14 = new ol.Feature({
+            geometry: new ol.geom.Point([282.9260428033074, 111.36378489757945])
+        });
+        var devFeature15 = new ol.Feature({
+            geometry: new ol.geom.Point([314.2151053033074, 143.70753489757945])
+        });
+        var devFeature16 = new ol.Feature({
+            geometry: new ol.geom.Point([337.7697928033074, 143.35597239757945])
+        });
+        var devFeature17 = new ol.Feature({
+            geometry: new ol.geom.Point([325.1135428033074, 118.04347239757945])
+        });
+        var devFeature18 = new ol.Feature({
+            geometry: new ol.geom.Point([250.58229280330738, 95.89503489757945])
+        });
+        var devFeature19 = new ol.Feature({
+            geometry: new ol.geom.Point([236.51979280330738, 56.52003489757945])
+        });
+        var devFeature20 = new ol.Feature({
+            geometry: new ol.geom.Point([236.51979280330738, 56.52003489757945])
+        });
+        var devFeature21 = new ol.Feature({
+            geometry: new ol.geom.Point([312.6123081162579, 97.03968961628433])
+        });
+        var devFeature22 = new ol.Feature({
+            geometry: new ol.geom.Point([334.0576206162579, 93.87562711628433])
+        });
+        var devFeature23 = new ol.Feature({
+            geometry: new ol.geom.Point([334.0576206162579, 93.87562711628433])
+        });
+        var devFeature24 = new ol.Feature({
+            geometry: new ol.geom.Point([252.14355811625794, 34.110002116284335])
+        });
+        var devFeature25 = new ol.Feature({
+            geometry: new ol.geom.Point([284.8388706162579, 60.828752116284335])
+        });
+        var devFeature26 = new ol.Feature({
+            geometry: new ol.geom.Point([323.8623081162579, 36.570939616284335])
+        });
+
+        var style = new ol.style.Style({
+            image: new ol.style.Icon({
+                src: './testpng/tx2.png',
+                size: [64, 64]
+            }),
+            text: new ol.style.Text({
+                text: '  ',
+                font: '8px Calibri,sans-serif',
+                fill: new ol.style.Fill({
+                    //强行把字体设置为透明的 T_T 这样子我就可以方便的取到设备名字了
+                    color: 'rgba(255, 255, 255, 0.0)'
+                })
+            })
+        });
+        devFeature.setStyle(style);
+        devFeature1.setStyle(style);
+        devFeature2.setStyle(style);
+        devFeature3.setStyle(style);
+        devFeature4.setStyle(style);
+        devFeature5.setStyle(style);
+        devFeature6.setStyle(style);
+        devFeature7.setStyle(style);
+        devFeature8.setStyle(style);
+        devFeature9.setStyle(style);
+        devFeature10.setStyle(style);
+        devFeature11.setStyle(style);
+        devFeature12.setStyle(style);
+        devFeature13.setStyle(style);
+        devFeature14.setStyle(style);
+        devFeature15.setStyle(style);
+        devFeature16.setStyle(style);
+        devFeature17.setStyle(style);
+        devFeature18.setStyle(style);
+        devFeature19.setStyle(style);
+        devFeature20.setStyle(style);
+        devFeature21.setStyle(style);
+        devFeature22.setStyle(style);
+        devFeature23.setStyle(style);
+        devFeature24.setStyle(style);
+        devFeature25.setStyle(style);
+        devFeature26.setStyle(style);
+
+        devsource1.addFeature(devFeature);
+        devsource1.addFeature(devFeature1);
+        devsource1.addFeature(devFeature2);
+        devsource1.addFeature(devFeature3);
+        devsource1.addFeature(devFeature4);
+        devsource1.addFeature(devFeature5);
+        devsource1.addFeature(devFeature6);
+        devsource1.addFeature(devFeature7);
+        devsource1.addFeature(devFeature8);
+        devsource1.addFeature(devFeature9);
+        devsource1.addFeature(devFeature10);
+        devsource1.addFeature(devFeature11);
+        devsource1.addFeature(devFeature12);
+        devsource1.addFeature(devFeature13);
+        devsource1.addFeature(devFeature14);
+        devsource1.addFeature(devFeature15);
+        devsource1.addFeature(devFeature16);
+        devsource1.addFeature(devFeature17);
+        devsource1.addFeature(devFeature18);
+        devsource1.addFeature(devFeature19);
+        devsource1.addFeature(devFeature20);
+        devsource1.addFeature(devFeature21);
+        devsource1.addFeature(devFeature22);
+        devsource1.addFeature(devFeature23);
+        devsource1.addFeature(devFeature24);
+        devsource1.addFeature(devFeature25);
+        devsource1.addFeature(devFeature26);
+
+    }
+
+    ///////////////////设备电子围栏代码开始///////////////////////
+    function bulidFenceFeature(fencejson) {
+        var style = new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                lineDash: [1, 2, 3, 4, 5, 6],
+                color: 'red',
+                width: 2
+            })
+        });
+        var coordinates = fencejson.coordinates;
+        var feature = new ol.Feature({
+            geometry: new ol.geom.Polygon([
+                coordinates
+            ])
+        });
+        feature.setId(fencejson.id);
+        feature.setStyle(style);
+        fencesource.addFeature(feature);
+    }
+
+
+    ///////////////////定义交互
+    var modify = new ol.interaction.Modify({source: devsource1});
+    map.addInteraction(modify);
+    var draw, snap;
+
+    function removeInteraction() {
+        map.removeInteraction(draw);
+        map.removeInteraction(snap);
+        map.removeInteraction(modify);
+    }
+
+    /***
+     * 通过交互绘制出间隔图形
+     */
+    function addInteractions() {
+        draw = new ol.interaction.Draw({
+            source: devsource1,
+            type: 'MultiLineString'
+        });
+        map.addInteraction(draw);
+        snap = new ol.interaction.Snap({source: devsource1});
+        map.addInteraction(snap);
+        //绘制完成之后弹出prompt框 输入值之后存储到数据库 否则移除已经画好的图形
+        draw.on('drawend', function (event) {
+            drawfeature = event.feature;
+            var Coordinates = event.feature.getGeometry().getCoordinates();
+            console.log(Coordinates);
+        });
+    }
+
+    ////////////////////////////路径规划开始///////////////////////////////////////
+
+    function addroad() {
+        var feature1 = new ol.Feature({
+            geometry: new ol.geom.MultiLineString(
+                [
+                    [
+                        [49.23904514544153, 60.43825481864653],
+                        [26.38748264544153, 82.58669231864653]
+                    ],
+                    [
+                        [49.94217014544153, 58.68044231864653],
+                        [11.27029514544153, 48.13356731864653]
+                    ],
+                    [
+                        [49.94217014544153, 58.68044231864653],
+                        [85.80154514544154, 52.52809856864653]],
+                    [
+                        [49.94217014544153, 58.68044231864653],
+                        [44.215105303307396, 19.16651927257942]],
+                    [
+                        [49.94217014544153, 58.68044231864653],
+                        [110.60333950524827, 85.12403328095627]],
+                    [
+
+                        [49.94217014544153, 58.68044231864653],
+                        [103.63046877232145, 22.959125835385066]
+                    ]
+                ]
+            )
+        });
+        var feature = new ol.Feature({
+            geometry: new ol.geom.MultiLineString(
+                [
+                    [
+                        [168.3609800322935, 126.8643014033747],
+                        [192.2672300322935, 79.4033639033747]
+                    ],
+                    [
+                        [154.6500425322935, 59.0127389033747],
+                        [198.9469175322935, 75.1846139033747]
+                    ],
+                    [
+                        [199.78415527362284, 87.22475625380781],
+                        [204.70603027362284, 106.91225625380781]
+                    ],
+                    [
+                        [199.98286091545302, 77.01878913774219],
+                        [203.58637654045302, 67.87816413774219]
+                    ],
+                    [
+                        [180.03168904045287, 41.774648512742175],
+                        [194.71535895400493, 73.63975918431697]
+                    ],
+                    [
+                        [240.71137650692526, 92.39964851274217],
+                        [204.14887650692526, 80.09496101274217]
+                    ]
+                    ,
+                    [
+                        [227.316266013951, 129.46925364757956],
+                        [202.003766013951, 79.89894114757956]
+                    ],
+                    [
+                        [237.46901148625193, 60.38722239757948],
+                        [200.90651148625193, 80.07472239757948]
+                    ]
+                ]
+            )
+        });
+        var feature2 = new ol.Feature({
+            geometry: new ol.geom.MultiLineString(
+                [
+                    [
+                        [258.5931101894803, 40.007790250229164],
+                        [323.6321726894803, 61.453102750229164]
+                    ],
+                    [
+                        [287.7727976894804, 61.98044650022915],
+                        [326.9720164394804, 65.49607150022915]
+                    ],
+                    [
+                        [327.4993601894804, 39.65622775022915],
+                        [333.8274851894804, 59.87107150022915]
+                    ],
+                    [
+
+                        [333.8274851894804, 91.16013400022915],
+                        [334.0032664394804, 70.59372775022915]
+
+                    ],
+                    [
+                        [313.7884226894804, 89.40232150022916],
+                        [330.8392039394804, 67.78122775022916]
+                    ]
+
+                ]
+            )
+        });
+        var feature3 = new ol.Feature({
+            geometry: new ol.geom.MultiLineString(
+                [
+                    [
+                        [268.1268470315563, 142.23335071553612],
+                        [321.5643470315563, 164.90913196553612]
+                    ],
+                    [
+
+                        [340.9002845315563, 147.85835071553612],
+                        [328.5955970315563, 162.27241321553612]
+                    ],
+                    [
+                        [318.0487220315563, 147.15522571553612],
+                        [325.6073157815563, 160.86616321553612]
+                    ],
+                    [
+
+                        [284.6502845315563, 113.58100696553612],
+                        [321.5643470315563, 161.21772571553612]
+
+                    ],
+                    [
+
+                        [324.7284095315563, 122.72163196553612],
+                        [327.1893470315563, 158.22944446553612]
+                    ]
+
+                ]
+            )
+        });
+
+
+        var style = new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                lineDash: [1, 2, 3, 4, 5, 6],
+                color: '#0044CC',
+                width: 2
+            })
+        });
+        feature1.setStyle(style);
+        feature.setStyle(style);
+        feature2.setStyle(style);
+        feature3.setStyle(style);
+        devsource2.addFeature(feature1);
+        devsource2.addFeature(feature);
+        devsource2.addFeature(feature2);
+        devsource2.addFeature(feature3);
+    }
+
+    function toggleControlPanel() {
+        if (map.getLayers().getLength() < 4) {
+            map.addLayer(tiled);
+        } else {
+            map.removeLayer(tiled);
+        }
+    }
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>设备管理</title>
+    <link rel="stylesheet" href="./js/ol.css" type="text/css">
+    <script src="./js/ol.js"></script>
+    <script src="./js/jquery-1.11.3.min.js"></script>
+</head>
+<body style="width: 100%;height: 100%">
+<div id="map" class="map"></div>
+<script type="text/javascript">
+
+    $(function () {
+        removeInteraction();
+        bulidDevFeature();
+    });
+
+    //定义底图传输格式以及范围
+    var format = 'image/png';
+    var bounds = [-0.1888009466926439, -8.914923602420576,
+        368.11119905330736, 173.98624339757941];
+    //变电站底图
+    var tiled = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+            ratio: 1,
+            url: 'http://localhost:8080/geoserver/sicpbase/wms',
+            params: {
+                'FORMAT': format,
+                'VERSION': '1.1.1',
+                STYLES: 'simple_roads',
+                LAYERS: 'sicpbase:Et'
+            }
+        })
+    });
+    //变电站走路径图 暂不加载
+    var untiled = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+            ratio: 1,
+            url: 'http://localhost:8080/geoserver/sicprd/wms',
+            params: {
+                'FORMAT': format,
+                'VERSION': '1.1.1',
+                STYLES: '',
+                LAYERS: '	sicprd:sicp_rd',
+            }
+        })
+    });
+    //底图用的坐标系 单位为 M 且为x y平面坐标系
+    var projection = new ol.proj.Projection({
+        code: 'EPSG:404000',
+        units: 'degrees',
+        axisOrientation: 'neu',
+        global: false
+    });
+
+
+    //加载间隔的source
+    var source = new ol.source.Vector();
+    //加载间隔的图层
+    var bayslayer = new ol.layer.Vector({
+        source: source
+    });
+    //存储绘制的间隔feature
+    var drawfeature = null;
+
+    //加载设备的source
+    var devsource = new ol.source.Vector();
+    //加载设备的图层
+    var devlayer = new ol.layer.Vector({
+        source: devsource
+    });
+
+
+    //加载底图（地图） 以及其他地方的图层
+    var map = new ol.Map({
+        target: 'map',
+        /*  overlays: [overlay],*/
+        layers: [tiled, bayslayer],
+        view: new ol.View({
+            zoom: 1,
+            projection: projection
+        })
+    });
+    //使底图图层固定在底图图层大小范围内
+    map.getView().fit(bounds, map.getSize());
+
+    /***
+     *监听地图层级变化同时放大缩小间隔标记文字设备图标大小
+     */
+    map.getView().on('change:resolution', function () {
+        //在缩放等级大于5的时候加载设备层 否则移除设备层
+        if (this.getZoom() > 3) {
+            if (map.getLayers().getLength() < 3) {
+                map.addLayer(devlayer);
+
+            }
+        } else {
+            if (map.getLayers().getLength() > 3) {
+                map.removeLayer(devlayer);
+            }
+        }
+
+        source.forEachFeature(function (feature) {
+            var style = feature.getStyle();
+            style.getText().setScale(this.getZoom() / 2);
+            feature.setStyle(style);
+        }, this);
+
+        devsource.forEachFeature(function (feature) {
+            var style = feature.getStyle();
+            style.getText().setScale(this.getZoom() / 3);
+            style.getImage().setScale(this.getZoom() / 3);
+            feature.setStyle(style);
+        }, this);
+
+    });
+
+
+    /////////////////////////////////间隔开始//////////////////
+    //定义交互对象
+    var modify = new ol.interaction.Modify({source: source});
+    map.addInteraction(modify);
+    var draw, snap;
+
+    /***
+     *移除交互
+     */
+    function removeInteraction() {
+        map.removeInteraction(draw);
+        map.removeInteraction(snap);
+        map.removeInteraction(modify);
+    }
+
+    /***
+     * 通过交互绘制出间隔图形
+     */
+    function addInteractions() {
+        draw = new ol.interaction.Draw({
+            source: source,
+            type: 'Polygon'
+        });
+        map.addInteraction(draw);
+        snap = new ol.interaction.Snap({source: source});
+        map.addInteraction(snap);
+    }
+
+    /////////////////设备管理svg图标主要代码开始////////////////////
+    //构建设备的feature对象
+    function bulidDevFeature() {
+        var devFeature = new ol.Feature({
+            geometry: new ol.geom.Point([0, 0])
+        });
+        devFeature.setId(devjson.id);
+        // 构建svg的Image对象--断路器闭合状态svg代码 这里可能需要很多种svg代码片段 可以考虑封个js或者写个后台方法
+        var svg = '<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ' +
+            'x="0px" y="0px" width="' + 130 + 'px" height="' + 130 + 'px" viewBox="' + '0 ' + '0 ' + '130 ' + '130' + '+" enable-background="new' + ' 0 0 ' + '130' + ' ' + '130" xml:space="preserve">' +
+            '<rect x="53.8" y="36.8" width="26.7" height="58.7" stroke="#000"  fill="#000" stroke-width="1.5"/> ' +
+            '<line  stroke="#231815" stroke-width="1.5"  fill="#EFEFEF" x1="66.5" y1="8.5" x2="66.5" y2="36.8"/> ' +
+            '<line  stroke="#231815"  stroke-width="1.5" fill="#EFEFEF" x1="66.5" y1="123.5" x2="66.5" y2="95.8"/>' +
+            '</svg>';
+        //新建图片对象
+        var imgheight = 130;
+        var imgwidth = 130;
+        var mysvg = new Image();
+        mysvg.src = 'data:image/svg+xml,' + escape(svg);
+        var style = new ol.style.Style({
+            image: new ol.style.Icon({
+                img: mysvg,    // 设置Image对象
+                imgSize: [imgwidth, imgheight]    // 及图标大小
+            }),
+            text: new ol.style.Text({
+                text: '',
+                font: '8px Calibri,sans-serif',
+                fill: new ol.style.Fill({
+                    //强行把字体设置为透明的 T_T 这样子我就可以方便的取到设备名字了
+                    color: 'rgba(255, 255, 255, 0.0)'
+                })
+            })
+        });
+        devFeature.setStyle(style);
+        devsource.addFeature(devFeature);
+    }
+
+    ///////////////////设备电子围栏代码开始///////////////////////
+    function bulidFenceFeature(fencejson) {
+        var style = new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                lineDash: [1, 2, 3, 4, 5, 6],
+                color: '#0044CC',
+                width: 2
+            })
+        });
+        var coordinates = fencejson.coordinates;
+        var feature = new ol.Feature({
+            geometry: new ol.geom.Polygon([
+                coordinates
+            ])
+        });
+        feature.setId(fencejson.id);
+        feature.setStyle(style);
+        fencesource.addFeature(feature);
+    }
+</script>
+</body>
+</html>

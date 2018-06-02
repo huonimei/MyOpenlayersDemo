@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>show svg</title>
+</head>
+<body>
+<!--这里用来校验svg图形-->
+<div style="width:135px;height: 135px;">
+    <svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 135 135" style="enable-background:new 0 0 135 135;" xml:space="preserve">
+<rect x="53.8" y="36.8" class="st0" width="26.7" height="58.7" stroke="#000"  fill="#fff" stroke-width="1.5"/>
+<line  stroke="#231815" stroke-width="1.5"  fill="#EFEFEF" x1="66.5" y1="8.5" x2="66.5" y2="36.8"/>
+<line  stroke="#231815"  stroke-width="1.5" fill="#EFEFEF" x1="66.5" y1="123.5" x2="66.5" y2="95.8"/>
+</svg>
+</div>
+<script>
+    // ==UserScript==
+    // @name                堆糖去除限制
+    // @name:zh-CN          堆糖去除限制
+    // @name:zh-TW          堆糖去除限制
+    // @description         Avoid link redirect for duitang.com
+    // @description:zh-CN   让堆糖网页中的站外链接直接跳转至目标网址，而不经过一个二次跳转页面。重定向处理将会在点击链接瞬间自动触发
+    // @description:zh-TW   讓堆糖網頁中的站外鏈接直接跳轉至目標網址，而不經過壹個二次跳轉頁面。重定向處理將會在點擊鏈接瞬間自動觸發
+
+    // @author              huonimei
+    // @namespace           huonimei.com
+    // @homepageURL         huonimei.io
+    // @supportURL          www.github.com/huonimei/duitangNoLogIn
+    // @license             GPL-3.0
+    // @icon                http://www.duitang.com/favicon.ico
+    // @require             http://code.jquery.com/jquery-2.1.1.min.js
+
+    // @grant               none
+    // @run-at              document-idle
+    // @include             https://www.duitang.com/*
+
+    // @date                03/22/2018
+    // @modified            03/22/2018
+    // @version             0.1
+    // ==/UserScript==
+
+    var callcount = 0;
+    // 关闭窗口部分
+    function closeWindow() {
+        callcount++;
+        $(".mask-close").click();
+    }
+    // 转换url部分
+    function decodeURI2Console() {
+        if (window.location.pathname == '/blog/') {
+            if ($(".l-title").length > 0) {
+                var hrefs = $(".l-title");
+                for (var a = 0; a < hrefs.length; a++) {
+                    var oldUrlDecode = decodeURI(hrefs[a].getAttribute("href").substring(64, hrefs[a].getAttribute("href").length));
+                    console.error(decodeURIComponent(oldUrlDecode));
+                }
+            }
+            if ($(".match-cnt>a").length > 0) {
+                var hrefArray = $(".match-cnt>a");
+                for (var b = 0; b < hrefArray.length; b++) {
+                    var AfterDecodeUrl = decodeURI($(".match-cnt>a")[b].getAttribute("href").substring(36, $(".match-cnt>a")[b].getAttribute("href").length));
+                    console.error(decodeURIComponent(AfterDecodeUrl));
+                }
+            }
+        }
+    }
+    $(function () {
+        if (callcount < 1) {
+            closeWindow();
+        }
+        decodeURI2Console();
+    });
+</script>
+</body>
+</html>

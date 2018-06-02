@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html style="width: 100%;height: 100%">
+<head>
+    <title>Static Image</title>
+    <link rel="stylesheet" href="https://openlayers.org/en/v4.3.2/css/ol.css" type="text/css">
+    <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+    <script src="https://openlayers.org/en/v4.3.2/build/ol.js"></script>
+</head>
+<body style="width: 100%;height: 100%">
+<div id="map" class="map" style="width: 100%;height: 500px"></div>
+<form class="form-inline">
+    <label>Shape type &nbsp;</label>
+    <select id="type">
+        <option value="Box">Box</option>
+    </select>
+</form>
+
+
+<script>
+    // Map views always need a projection.  Here we just want to map image
+    // coordinates directly to map coordinates, so we create a projection that uses
+    // the image extent in pixels.
+    //部分英语的翻译
+    //Interactions控制
+    //pixels像素
+    //Polygon 多边形
+    //coordinates 坐标
+    //geometry 几何形状
+    /*todolist*/
+    //绘制间隔。给间隔设置id.实现间隔的增删改查(坐标怎么控制 大雾）
+    //以上
+
+
+    //定义地图可见区域（我认为是这样的。
+    var extent = [0, 0, 1863, 500];
+    //定义地图的投影方式：图片。
+    var projection = new ol.proj.Projection({
+        code: 'xkcd-image',
+        units: 'pixels',
+        extent: extent
+    });
+
+    //独立出图片层
+    var imgtip = new ol.layer.Image({
+        source: new ol.source.ImageStatic({
+            url: './testpng/basemap.png',
+            projection: projection,
+            imageExtent: extent
+        })
+    });
+
+    //在这里写画图形的layer定义
+    //定义要画的对象 为全局变量
+    var source = new ol.source.Vector({wrapX: false});
+    //  绘制形状层
+    var vector = new ol.layer.Vector({
+        source: source,
+        //这里定义的是之后要加载的形状
+        style: new ol.style.Style({
+            fill: new ol.style.Fill({
+                color: 'rgba(255, 255, 255, 0.2)'
+            }),
+            stroke: new ol.style.Stroke({
+                color: '#ffcc33',
+                width: 2
+            }),
+            image: new ol.style.Circle({
+                radius: 7,
+                fill: new ol.style.Fill({
+                    color: '#ffcc33'
+                })
+            })
+        })
+    });
+
+    //加载底图（地图） 以及其他地方的图层
+    var map = new ol.Map({
+        layers: [imgtip, vector],
+        target: 'map',
+        view: new ol.View({
+            projection: projection,
+            center: ol.extent.getCenter(extent),
+            zoom: 2,
+            maxZoom: 4,
+            minZoom: 1
+        })
+    });
+
+
+    var modify = new ol.interaction.Modify({source: source});
+    map.addInteraction(modify);
+
+    var draw, snap; // global so we can remove them later
+
+    function addInteraction() {
+        var  value = 'Circle';
+        var geometryFunction;
+            geometryFunction = function (coordinates, geometry) {
+                if (!geometry) {
+                    geometry = new ol.geom.Polygon(null);
+                }
+                var start = coordinates[0];
+                var end = coordinates[1];
+                geometry.setCoordinates([
+                    [[109.11270498266376, 147.06996783789128], [109.11270498266376, 86.57704791601626], [205.5375096701638, 86.57704791601626], [205.5375096701638, 147.06996783789128], [109.11270498266376, 147.06996783789128]]
+                ]);
+                return geometry;
+            };
+        draw = new ol.interaction.Draw({
+            source: source,
+            type: /** @type {ol.geom.GeometryType} */ (value),
+            geometryFunction: geometryFunction
+        });
+        map.addInteraction(draw);
+    }
+    //加载完毕之后调用
+    addInteraction();
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html style="width: 100%;height: 100%">
+<head>
+    <title>svg maker</title>
+    <link rel="stylesheet" href="./js/ol.css" type="text/css">
+    <script src="./js/ol.js"></script>
+</head>
+<body style="width: 100%;height: 100%">
+<div id="map" class="map" style="width: 1536px;height: 500px"></div>
+<script>
+    var layer = new ol.layer.Vector({
+        source: new ol.source.Vector()
+    });
+
+    var extent = [0, 0, 1863, 500];
+    var projection = new ol.proj.Projection({
+        code: 'xkcd-image',
+        units: 'pixels',
+        extent: extent
+    });
+
+    //加载图片底图的图层
+    var imgtip = new ol.layer.Image({
+        source: new ol.source.ImageStatic({
+            url: './testpng/basemap.png',
+            projection: projection,
+            imageExtent: extent
+        })
+    });
+
+
+    //加载svg绘制出来的设备的图层
+    var anchor = new ol.Feature({
+        geometry: new ol.geom.Point([180, 100])
+    });
+    // 构建svg的Image对象
+    var svg = '<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ' +
+        'x="0px" y="0px" width="130px" height="130px" viewBox="0 0 130 130" enable-background="new 0 0 130 130" xml:space="preserve">' +
+        '<rect x="53.8" y="36.8" width="26.7" height="58.7" stroke="#000"  fill="#000" stroke-width="1.5"/> ' +
+        '<line  stroke="#231815" stroke-width="1.5"  fill="#EFEFEF" x1="66.5" y1="8.5" x2="66.5" y2="36.8"/> ' +
+        '<line  stroke="#231815"  stroke-width="1.5" fill="#EFEFEF" x1="66.5" y1="123.5" x2="66.5" y2="95.8"/>' +
+        '</svg>';
+    var mysvg = new Image();
+
+    mysvg.src = 'data:image/svg+xml,' + escape(svg);
+
+    var style = new ol.style.Style({
+        image: new ol.style.Icon({
+            img: mysvg,    // 设置Image对象
+            imgSize: [130, 130]   // 及图标大小
+        })
+    });
+
+    anchor.setStyle(style);
+    layer.getSource().addFeature(anchor);
+
+    //加载底图（地图） 以及其他地方的图层
+    var map = new ol.Map({
+        layers: [imgtip, layer],
+        target: 'map',
+        view: new ol.View({
+            projection: projection,
+            center: ol.extent.getCenter(extent),
+            zoom: 2,
+            maxZoom: 4,
+            minZoom: 1
+        })
+    });
+    // 监听地图层级变化
+    map.getView().on('change:resolution', function () {
+        var style = anchor.getStyle();
+        // 重新设置图标的缩放率，基于层级10来做缩放
+        style.getImage().setScale(map.getView().getZoom() / 4);
+        anchor.setStyle(style);
+    });
+
+
+
+</script>
+</body>
+</html>

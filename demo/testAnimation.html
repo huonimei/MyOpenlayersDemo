@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Marker Animation 人员移动轨迹动画微调</title>
+    <meta http-equiv=Content-Type content="text/html;charset=utf-8">
+    <meta http-equiv=X-UA-Compatible content="IE=edge,chrome=1">
+    <meta content=always name=referrer>
+    <link rel="stylesheet" href="./js/ol.css" type="text/css">
+    <script src="./js/ol.js"></script>
+    <script src="./js/jquery-1.11.3.min.js"></script>
+</head>
+<body>
+<div id="map" class="map"></div>
+<label for="speed" style="display: none">
+    speed:&nbsp;
+    <input id="speed" type="range" min="0.0011" max="0.009" step="100" value="0.000002">
+</label>
+<button id="start-animation" style="display: none">Start Animation</button>
+<script>
+    var route;
+    var bounds = [0.0005950317751121, 0.0008108268570922, 0.0067774664494178, 0.003885651474484];
+    var format = 'image/png';
+    var projection = new ol.proj.Projection({
+        code: 'EPSG:4326',
+        units: 'degrees',
+        axisOrientation: 'neu'
+    });
+    var view = new ol.View({
+        projection: projection,
+        zoom: 18,
+        minZoom: 18
+    });
+    var untiled = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+            ratio: 1,
+            url: 'http://192.168.0.69:7000/geoserver/sicp_base_map/wms',
+            params: {
+                'FORMAT': format,
+                'VERSION': '1.1.1',
+                LAYERS: 'sicp_base_map:map_funing',
+                STYLES: 'greylines'
+            }
+        })
+    });
+
+    var source = new ol.source.Vector({
+        wrapX: false
+    });
+    var vector = new ol.layer.Vector({
+        source: source
+    });
+    var map = new ol.Map({
+        target: document.getElementById('map'),
+        loadTilesWhileAnimating: true,
+        view: view,
+        layers: [untiled, vector]
+    });
+
+    map.getView().fit(bounds, map.getSize());
+
+        route = new ol.geom.LineString([
+            [0.0014761088839934657, 0.0016830513300947411]
+            , [0.0014975665561126064, 0.0017259666743330224]
+            , [0.0016048549167083095, 0.0017688820185713036]
+            , [0.0018838046542571376, 0.0018547127070478661]
+            , [0.002141296719686825, 0.0018976280512861474]
+            , [0.002420246457235653, 0.0019298145594648583]
+            , [0.0026777385226653405, 0.001951272231583999]
+            , [0.002870857571737606, 0.001951272231583999]
+            , [0.003074705456869442, 0.0019298145594648583]
+            , [0.0032892821780608483, 0.0018976280512861474]
+            , [0.003385841702596981, 0.001886899215226577]
+            , [0.0034716723910735436, 0.001886899215226577]
+            , [0.0035360454074309655, 0.001886899215226577]
+            , [0.0035789607516692468, 0.001886899215226577]
+            , [0.003621876095907528, 0.001886899215226577]
+            , [0.0036433337680266686, 0.001886899215226577]
+            , [0.0036647914401458093, 0.001886899215226577]
+        ]);
+//        if (source.getFeatureById("roadsline") != null) {
+//            console.log("in");
+//        route = source.getFeatureById("roadsline").getGeometry();
+//        }
+
+    /***
+     * 点移动动画思路
+     * 获取路的总的点
+     *  按理说应该是每次切换坐标
+     *  但是没看到这样的代码= =
+     *  在movefeature里面
+     */
+
+
+        var routeCoords = route.getCoordinates();
+
+        var routeLength = routeCoords.length;
+
+        var routeFeature = new ol.Feature({
+            type: 'route',
+            geometry: route
+        });
+        var geoMarker = new ol.Feature({
+            type: 'geoMarker',
+            geometry: new ol.geom.Point(routeCoords[1])
+        });
+        var startMarker = new ol.Feature({
+            type: 'iconstart',
+            geometry: new ol.geom.Point(routeCoords[0])
+        });
+        var endMarker = new ol.Feature({
+            type: 'iconend',
+            geometry: new ol.geom.Point(routeCoords[routeLength - 1])
+        });
+
+        var styles = {
+            'route': new ol.style.Style({
+                stroke: new ol.style.Stroke({
+                    width: 6, color: [237, 212, 0, 0.8]
+                })
+            }),
+            'iconstart': new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 7,
+                    snapToPixel: false,
+                    fill: new ol.style.Fill({color: 'green'}),
+                    stroke: new ol.style.Stroke({
+                        color: 'green', width: 2
+                    })
+                })
+            }),
+            'iconend': new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 7,
+                    snapToPixel: false,
+                    fill: new ol.style.Fill({color: 'red'}),
+                    stroke: new ol.style.Stroke({
+                        color: 'red', width: 2
+                    })
+                })
+            }),
+            'geoMarker': new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 7,
+                    snapToPixel: false,
+                    fill: new ol.style.Fill({color: 'black'}),
+                    stroke: new ol.style.Stroke({
+                        color: 'white', width: 2
+                    })
+                })
+            })
+        };
+
+        var animating = false;
+        var speed, now;
+        var speedInput = document.getElementById('speed');
+        var startButton = document.getElementById('start-animation');
+
+        var vectorLayer = new ol.layer.Vector({
+            source: new ol.source.Vector({
+                features: [routeFeature, geoMarker, startMarker, endMarker]
+            }),
+            style: function (feature) {
+                // hide geoMarker if animation is active
+                if (animating && feature.get('type') === 'geoMarker') {
+                    return null;
+                }
+                return styles[feature.get('type')];
+            }
+        });
+
+        map.addLayer(vectorLayer);
+
+        var moveFeature = function (event) {
+            var vectorContext = event.vectorContext;
+            var frameState = event.frameState;
+            console.log('frameState',frameState.time);
+            if (animating) {
+                var elapsedTime = frameState.time - now;
+                console.log('elapsedTime',elapsedTime);
+                // here the trick to increase speed is to jump some indexes
+                // on lineString coordinates
+                var index = Math.round(speed * elapsedTime / 1);
+                if (index >= routeLength) {
+                    stopAnimation(true);
+                    return;
+                }
+
+                console.log('index',index);
+                var currentPoint = new ol.geom.Point(routeCoords[index]);
+                console.log('currentPoint',currentPoint.getCoordinates());
+                var feature = new ol.Feature(currentPoint);
+                vectorContext.drawFeature(feature, styles.geoMarker);
+            }
+            map.render();
+        };
+
+        function startAnimation() {
+            if (animating) {
+                stopAnimation(false);
+            } else {
+                animating = true;
+                now = new Date().getTime();
+                console.log('now',now);
+                speed = speedInput.value;
+                startButton.textContent = 'Cancel Animation';
+                // hide geoMarker
+                geoMarker.setStyle(null);
+                map.on('postcompose', moveFeature);
+                map.render();
+            }
+        }
+
+
+        /**
+         * @param {boolean} ended end of animation.
+         */
+        function stopAnimation(ended) {
+            animating = false;
+            startButton.textContent = 'Start Animation';
+
+            // if animation cancelled set the marker at the beginning
+            var coord = ended ? routeCoords[routeLength - 1] : routeCoords[0];
+            /** @type {ol.geom.Point} */ (geoMarker.getGeometry())
+                .setCoordinates(coord);
+            //remove listener
+            map.un('postcompose', moveFeature);
+        }
+
+//        startButton.addEventListener('click', startAnimation, false);
+        startAnimation();
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Freehand Drawing</title>
+    <link rel="stylesheet" href="./js/ol.css" type="text/css">
+    <script src="./js/ol.js"></script>
+</head>
+<body>
+<div id="map" class="map"></div>
+<script>
+    var format = 'image/png';
+    var bounds = [0.0005950317751121, 0.0008108268570922, 0.0067774664494178, 0.003885651474484];
+    var untiled = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+            ratio: 1,
+            url: 'http://192.168.0.69:7000/geoserver/sicp_base_map/wms',
+            params: {
+                'FORMAT': format,
+                'VERSION': '1.1.1',
+                LAYERS: 'sicp_base_map:map_funing',
+                STYLES: 'greylines'
+            }
+        })
+    });
+
+
+    var source = new ol.source.Vector({wrapX: false});
+
+    var vector = new ol.layer.Vector({
+        source: source
+    });
+
+    var projection = new ol.proj.Projection({
+        code: 'EPSG:4326',
+        units: 'degrees',
+        axisOrientation: 'neu',
+        global: true
+
+    });
+    var map = new ol.Map({
+        target: 'map',
+        layers: [untiled, vector],
+        view: new ol.View({
+            zoom: 17,
+            minZoom: 17,
+            projection: projection
+        })
+    });
+
+    map.getView().fit(bounds, map.getSize());
+
+    var draw; // global so we can remove it later
+    function addInteraction() {
+        draw = new ol.interaction.Draw({
+            source: source,
+            type: 'LineString',
+            freehand: true
+        });
+        map.addInteraction(draw);
+        draw.on('drawend', function (evt) {
+            var Coordinates = evt.feature.getGeometry().getCoordinates();
+            console.log(Coordinates);
+            console.debug(Coordinates);
+            console.error(Coordinates);
+        }, this);
+    }
+    addInteraction();
+</script>
+</body>
+</html>
